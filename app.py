@@ -6,7 +6,7 @@ from io import BytesIO
 import plotly.express as px
 
 st.set_page_config(
-    page_title="📊 Painel — Time Paulo Ferreira",
+    page_title="📊Base de dados - Empresas",
     page_icon="🟥",
     layout="wide"
 )
@@ -203,3 +203,4 @@ with c6:
     )
 
 st.markdown('<div class="footer">Feito com ❤️ em Streamlit + Plotly • Tema: Time Paulo Ferreira</div>', unsafe_allow_html=True)
+
