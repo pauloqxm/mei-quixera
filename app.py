@@ -56,7 +56,7 @@ col_title, col_right = st.columns([0.7, 0.3])
 with col_title:
     st.markdown('<div class="topbar"><div class="title">📊 Painel — Time Paulo Ferreira</div><div>🔎 Explore os dados com filtros no corpo da página</div></div>', unsafe_allow_html=True)
 with col_right:
-    st.markdown('<div style="text-align:right;padding-top:8px;"><span class="chip">Tema • Vermelho PT</span></div>', unsafe_allow_html=True)
+    st.markdown('<div style="text-align:right;padding-top:20px;"><span class="chip">Tema • Vermelho PT</span></div>', unsafe_allow_html=True)
 
 # ---------------------------- LOAD DATA ----------------------------
 @st.cache_data
@@ -260,3 +260,4 @@ with c6:
     )
 
 st.markdown('<div class="footer">Feito com ❤️ em Streamlit + Plotly • Tema: Time Paulo Ferreira</div>', unsafe_allow_html=True)
+
