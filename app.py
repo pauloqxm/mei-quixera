@@ -38,7 +38,7 @@ st.markdown("""
         color: white;
     }
     .topbar .title {font-size: 18px; font-weight: 800; letter-spacing: .2px;}
-    .kpi {background: var(--card); border:1px solid var(--ring); padding:18px; border-radius: var(--radius); box-shadow: var(--shadow);}
+    .kpi {background: var(--card); border:1px solid var(--ring); padding:-18px; border-radius: var(--radius); box-shadow: var(--shadow);}
     .kpi h3 {margin: 0 0 8px 0; font-size: 13px; color: var(--muted); font-weight: 700; letter-spacing: .3px; text-transform:uppercase;}
     .kpi .big {font-size: 30px; font-weight: 900; color: var(--text);}
     .chip {display:inline-flex; gap:8px; align-items:center; background:#181f2a; border:1px solid var(--ring); padding:6px 10px; border-radius:999px; font-size:12px; color:var(--muted);}
@@ -260,5 +260,6 @@ with c6:
     )
 
 st.markdown('<div class="footer">Feito com ❤️ em Streamlit + Plotly • Tema: Time Paulo Ferreira</div>', unsafe_allow_html=True)
+
 
 
