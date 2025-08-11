@@ -1,4 +1,4 @@
-
+# app.py — Painel Time Paulo Ferreira (sem sidebar, com gráfico de meses)
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -51,23 +51,19 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ---------------------------- HEADER BAR ----------------------------
-col_logo, col_title, col_right = st.columns([0.12, 0.64, 0.24])
-with col_logo:
-    logo = st.file_uploader("Logo (opcional)", type=["png","jpg","jpeg"], label_visibility="collapsed")
-    if logo:
-        st.image(logo, width=64)
+# ---------------------------- HEADER ----------------------------
+col_title, col_right = st.columns([0.7, 0.3])
 with col_title:
-    st.markdown('<div class="topbar"><div class="title">📊 Painel — Time Paulo Ferreira</div><div>🔎 Explore os dados com filtros dinâmicos</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="topbar"><div class="title">📊 Painel — Time Paulo Ferreira</div><div>🔎 Explore os dados com filtros no corpo da página</div></div>', unsafe_allow_html=True)
 with col_right:
     st.markdown('<div style="text-align:right;padding-top:8px;"><span class="chip">Tema • Vermelho PT</span></div>', unsafe_allow_html=True)
 
 # ---------------------------- LOAD DATA ----------------------------
 @st.cache_data
-def load_data(file_or_path):
-    df = pd.read_csv(file_or_path, sep=",", low_memory=False)
+def load_data(path: str):
+    df = pd.read_csv(path, sep=",", low_memory=False)
 
-    # Datas -> datetime (dayfirst=True, comum em bases BR)
+    # Datas -> datetime
     for col in ["DATA_INICIO_ATIVIDADE", "DATA_SITUACAO_CADASTRAL"]:
         if col in df.columns:
             try:
@@ -75,11 +71,16 @@ def load_data(file_or_path):
             except Exception:
                 df[col] = pd.to_datetime(df[col], errors="coerce")
 
-    # Ano de início
+    # Ano e mês de início
     if "DATA_INICIO_ATIVIDADE" in df.columns:
         df["ANO_INICIO"] = df["DATA_INICIO_ATIVIDADE"].dt.year
+        df["MES_INICIO_NUM"] = df["DATA_INICIO_ATIVIDADE"].dt.month
     else:
         df["ANO_INICIO"] = np.nan
+        df["MES_INICIO_NUM"] = np.nan
+
+    meses = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]
+    df["MES_INICIO"] = df["MES_INICIO_NUM"].apply(lambda m: meses[int(m)-1] if pd.notna(m) and 1 <= int(m) <= 12 else np.nan)
 
     # Padronização de texto
     for col in ["UF","MUNICIPIO","SITUACAO_CADASTRAL","NOME_FANTASIA","CNAE_FISCAL_PRINCIPAL"]:
@@ -88,43 +89,45 @@ def load_data(file_or_path):
 
     return df
 
+# Caminho fixo (sem upload)
 DEFAULT_PATH = "baseqxbim_modelo.csv"
-up = st.file_uploader("📥 Envie a base CSV (ou deixe em branco para usar o arquivo local 'baseqxbim_modelo.csv')", type=["csv"])
-df = load_data(up if up is not None else DEFAULT_PATH)
+df = load_data(DEFAULT_PATH)
 
 if df.empty:
-    st.warning("Base vazia. Envie um CSV válido.")
+    st.warning("Base vazia. Garanta que 'baseqxbim_modelo.csv' está na mesma pasta do app.")
     st.stop()
 
-# ---------------------------- SIDEBAR FILTERS ----------------------------
-with st.sidebar:
-    st.markdown("## ⚙️ Filtros")
-    anos_validos = sorted(df["ANO_INICIO"].dropna().unique().tolist())
-    year_min, year_max = (int(min(anos_validos)), int(max(anos_validos))) if anos_validos else (2000, 2025)
+# ---------------------------- FILTERS (NO BODY) ----------------------------
+st.markdown("### ⚙️ Filtros")
 
-    ano_range = st.slider("Período (ano de início)", min_value=year_min, max_value=year_max,
-                          value=(year_min, year_max), step=1)
+# 1) Período (ano de início) — solicitado no corpo
+anos_validos = sorted(df["ANO_INICIO"].dropna().unique().tolist())
+year_min, year_max = (int(min(anos_validos)), int(max(anos_validos))) if anos_validos else (2000, 2025)
+ano_range = st.slider("Período (ano de início)", min_value=year_min, max_value=year_max,
+                      value=(year_min, year_max), step=1)
 
+# 2) Linha de filtros adicional (sem Municípios, conforme pedido)
+cuf, csit, ccnae, csearch = st.columns([0.18, 0.22, 0.30, 0.30])
+
+with cuf:
     ufs = sorted([u for u in df.get("UF", pd.Series(dtype=str)).dropna().unique().tolist() if u])
     uf_sel = st.multiselect("UF", options=ufs, default=ufs if len(ufs) <= 8 else [])
 
-    munis = sorted([m for m in df.get("MUNICIPIO", pd.Series(dtype=str)).dropna().unique().tolist() if m])
-    muni_sel = st.multiselect("Município", options=munis, default=[])
-
+with csit:
     situ_opts = sorted([s for s in df.get("SITUACAO_CADASTRAL", pd.Series(dtype=str)).dropna().unique().tolist() if s])
     situ_sel = st.multiselect("Situação Cadastral", options=situ_opts, default=[])
 
+with ccnae:
     cnae_opts = sorted([c for c in df.get("CNAE_FISCAL_PRINCIPAL", pd.Series(dtype=str)).dropna().unique().tolist() if c])
     cnae_sel = st.multiselect("CNAE Principal", options=cnae_opts, default=[])
 
+with csearch:
     search = st.text_input("Buscar por Nome Fantasia", placeholder="Digite parte do nome...")
 
-# ---------------------------- FILTER ----------------------------
+# ---------------------------- FILTER LOGIC ----------------------------
 mask = (df["ANO_INICIO"].fillna(year_min) >= ano_range[0]) & (df["ANO_INICIO"].fillna(year_max) <= ano_range[1])
 if uf_sel:
     mask &= df["UF"].isin(uf_sel)
-if muni_sel:
-    mask &= df["MUNICIPIO"].isin(muni_sel)
 if situ_sel:
     mask &= df["SITUACAO_CADASTRAL"].isin(situ_sel)
 if cnae_sel:
@@ -149,6 +152,7 @@ with col4:
 # ---------------------------- CHARTS ----------------------------
 c1, c2 = st.columns([1,1])
 
+# 1) Situação Cadastral
 with c1:
     if "SITUACAO_CADASTRAL" in fdf.columns and not fdf.empty:
         situ_counts = (
@@ -158,17 +162,18 @@ with c1:
             .rename_axis("Situacao")
             .reset_index(name="Quantidade")
         )
-        situ_fig = px.bar(
+        fig = px.bar(
             situ_counts, x="Situacao", y="Quantidade",
             title="Empresas por Situação Cadastral",
             labels={"Situacao":"Situação", "Quantidade":"Quantidade"}
         )
-        situ_fig.update_layout(margin=dict(l=8,r=8,t=50,b=8), height=380, bargap=0.25,
-                               plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(situ_fig, use_container_width=True)
+        fig.update_layout(margin=dict(l=8,r=8,t=50,b=8), height=360, bargap=0.25,
+                          plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Sem coluna 'SITUACAO_CADASTRAL' ou dados.")
 
+# 2) Top CNAE
 with c2:
     if "CNAE_FISCAL_PRINCIPAL" in fdf.columns and not fdf.empty:
         top_cnae = (
@@ -179,51 +184,53 @@ with c2:
             .rename_axis("CNAE")
             .reset_index(name="Quantidade")
         )
-        cnae_fig = px.bar(
+        fig = px.bar(
             top_cnae, x="CNAE", y="Quantidade",
             title="Top 10 CNAE Principal",
             labels={"CNAE":"CNAE", "Quantidade":"Quantidade"}
         )
-        cnae_fig.update_layout(margin=dict(l=8,r=8,t=50,b=8), height=380, bargap=0.25,
-                               plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(cnae_fig, use_container_width=True)
+        fig.update_layout(margin=dict(l=8,r=8,t=50,b=8), height=360, bargap=0.25,
+                          plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Sem coluna 'CNAE_FISCAL_PRINCIPAL' ou dados.")
 
+# 3) Linha temporal por ano + 4) Distribuição por mês
 c3, c4 = st.columns([1,1])
-with c3:
-    if "MUNICIPIO" in fdf.columns and not fdf.empty:
-        top_muni = (
-            fdf["MUNICIPIO"]
-            .fillna("Não informado")
-            .value_counts()
-            .head(10)
-            .rename_axis("Municipio")
-            .reset_index(name="Quantidade")
-        )
-        muni_fig = px.bar(
-            top_muni, x="Municipio", y="Quantidade",
-            title="Top 10 Municípios",
-            labels={"Municipio":"Município", "Quantidade":"Quantidade"}
-        )
-        muni_fig.update_layout(margin=dict(l=8,r=8,t=50,b=8), height=380, bargap=0.25,
-                               plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(muni_fig, use_container_width=True)
-    else:
-        st.info("Sem coluna 'MUNICIPIO' ou dados.")
 
-with c4:
+with c3:
     if "ANO_INICIO" in fdf.columns and not fdf.empty:
         serie = fdf.dropna(subset=["ANO_INICIO"]).groupby("ANO_INICIO").size().reset_index(name="Qtd")
-        serie_fig = px.line(serie, x="ANO_INICIO", y="Qtd", markers=True, title="Evolução de Aberturas por Ano")
-        serie_fig.update_traces(line=dict(width=3))
-        serie_fig.update_layout(margin=dict(l=8,r=8,t=50,b=8), height=380,
-                                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(serie_fig, use_container_width=True)
+        fig = px.line(serie, x="ANO_INICIO", y="Qtd", markers=True, title="Evolução de Aberturas por Ano")
+        fig.update_traces(line=dict(width=3))
+        fig.update_layout(margin=dict(l=8,r=8,t=50,b=8), height=360,
+                          plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Sem a coluna 'DATA_INICIO_ATIVIDADE' para gerar a evolução.")
 
-# ---------------------------- TABLE ----------------------------
+with c4:
+    if "MES_INICIO" in fdf.columns and not fdf.empty:
+        meses_ordem = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]
+        mes_counts = (
+            fdf["MES_INICIO"]
+            .dropna()
+            .astype(pd.CategoricalDtype(categories=meses_ordem, ordered=True))
+            .value_counts()
+            .sort_index()
+            .reset_index(name="Quantidade")
+            .rename(columns={"index": "Mês"})
+        )
+        fig = px.bar(mes_counts, x="MES_INICIO", y="Quantidade",
+                     title="Aberturas por Mês",
+                     labels={"MES_INICIO": "Mês", "Quantidade": "Quantidade"})
+        fig.update_layout(margin=dict(l=8,r=8,t=50,b=8), height=360, bargap=0.25,
+                          plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Sem base de datas para o gráfico mensal.")
+
+# ---------------------------- TABELA ----------------------------
 st.markdown("#### 📄 Registros filtrados")
 st.dataframe(fdf, use_container_width=True, hide_index=True)
 
