@@ -1,9 +1,11 @@
-# app.py — Painel Time Paulo Ferreira (sem sidebar, com gráfico de meses e filtro de período deslizante)
+# app.py — Painel Time Paulo Ferreira (com gráfico acumulado e filtro de período)
 import streamlit as st
 import pandas as pd
 import numpy as np
 from io import BytesIO
 import plotly.express as px
+import plotly.graph_objects as go
+from datetime import datetime
 
 st.set_page_config(
     page_title="📊 Painel — Time Paulo Ferreira",
@@ -213,18 +215,62 @@ with c2:
     else:
         st.info("Sem coluna 'CNAE_FISCAL_PRINCIPAL' ou dados.")
 
-# 3) Linha temporal por ano + 4) Distribuição por mês
+# 3) Linha temporal por ano com acumulado + 4) Distribuição por mês
 c3, c4 = st.columns([1,1])
 
 with c3:
     if "ANO_INICIO" in fdf.columns and not fdf.empty:
-        serie = fdf.dropna(subset=["ANO_INICIO"]).groupby("ANO_INICIO").size().reset_index(name="Qtd")
-        fig = px.line(serie, x="ANO_INICIO", y="Qtd", markers=True, 
-                     title="Evolução de Aberturas por Ano",
-                     line_shape="spline")
-        fig.update_traces(line=dict(width=3, color="#e11d2e"))
-        fig.update_layout(margin=dict(l=8,r=8,t=50,b=8), height=360,
-                        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+        # Dados anuais
+        serie_anual = fdf.dropna(subset=["ANO_INICIO"]).groupby("ANO_INICIO").size().reset_index(name="Qtd")
+        
+        # Cálculo do acumulado
+        serie_anual['Acumulado'] = serie_anual['Qtd'].cumsum()
+        
+        # Criar figura com Plotly
+        fig = go.Figure()
+        
+        # Adicionar linha de quantidade anual (barras)
+        fig.add_trace(go.Bar(
+            x=serie_anual["ANO_INICIO"],
+            y=serie_anual["Qtd"],
+            name="Aberturas por Ano",
+            marker_color='#e11d2e',
+            opacity=0.7
+        ))
+        
+        # Adicionar linha de acumulado (linha)
+        fig.add_trace(go.Scatter(
+            x=serie_anual["ANO_INICIO"],
+            y=serie_anual["Acumulado"],
+            name="Total Acumulado",
+            line=dict(color='#fde047', width=3),
+            yaxis='y2'
+        ))
+        
+        # Configurações do layout
+        fig.update_layout(
+            title="Evolução de Aberturas por Ano com Acumulado",
+            xaxis_title="Ano",
+            yaxis_title="Quantidade por Ano",
+            yaxis2=dict(
+                title="Total Acumulado",
+                overlaying='y',
+                side='right',
+                showgrid=False
+            ),
+            margin=dict(l=8,r=8,t=50,b=8),
+            height=360,
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            )
+        )
+        
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Sem a coluna 'DATA_INICIO_ATIVIDADE' para gerar a evolução.")
