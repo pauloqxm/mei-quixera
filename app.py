@@ -6,12 +6,12 @@ from io import BytesIO
 import plotly.express as px
 
 st.set_page_config(
-    page_title="📊Base de dados - Empresas",
+    page_title="📊 Painel — Time Paulo Ferreira",
     page_icon="🟥",
     layout="wide"
 )
 
-# ---------------------------- THEME / STYLES (Time Paulo Ferreira) ----------------------------
+# ---------------------------- THEME / STYLES ----------------------------
 st.markdown("""
     <style>
     :root {
@@ -64,17 +64,28 @@ with col_right:
 
 # ---------------------------- LOAD DATA ----------------------------
 @st.cache_data
-def load_data(file):
-    df = pd.read_csv(file, sep=",", low_memory=False)
-    # datas
+def load_data(file_or_path):
+    df = pd.read_csv(file_or_path, sep=",", low_memory=False)
+
+    # Datas -> datetime (dayfirst=True, comum em bases BR)
     for col in ["DATA_INICIO_ATIVIDADE", "DATA_SITUACAO_CADASTRAL"]:
         if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors="coerce", dayfirst=True, infer_datetime_format=True)
-    df["ANO_INICIO"] = df["DATA_INICIO_ATIVIDADE"].dt.year if "DATA_INICIO_ATIVIDADE" in df.columns else np.nan
-    # texto
+            try:
+                df[col] = pd.to_datetime(df[col], errors="coerce", dayfirst=True, infer_datetime_format=True)
+            except Exception:
+                df[col] = pd.to_datetime(df[col], errors="coerce")
+
+    # Ano de início
+    if "DATA_INICIO_ATIVIDADE" in df.columns:
+        df["ANO_INICIO"] = df["DATA_INICIO_ATIVIDADE"].dt.year
+    else:
+        df["ANO_INICIO"] = np.nan
+
+    # Padronização de texto
     for col in ["UF","MUNICIPIO","SITUACAO_CADASTRAL","NOME_FANTASIA","CNAE_FISCAL_PRINCIPAL"]:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip()
+
     return df
 
 DEFAULT_PATH = "baseqxbim_modelo.csv"
@@ -87,11 +98,12 @@ if df.empty:
 
 # ---------------------------- SIDEBAR FILTERS ----------------------------
 with st.sidebar:
-    st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/Red_star.svg/240px-Red_star.svg.png", caption="Time Paulo Ferreira", use_column_width=True)
     st.markdown("## ⚙️ Filtros")
     anos_validos = sorted(df["ANO_INICIO"].dropna().unique().tolist())
     year_min, year_max = (int(min(anos_validos)), int(max(anos_validos))) if anos_validos else (2000, 2025)
-    ano_range = st.slider("Período (ano de início)", min_value=year_min, max_value=year_max, value=(year_min, year_max), step=1)
+
+    ano_range = st.slider("Período (ano de início)", min_value=year_min, max_value=year_max,
+                          value=(year_min, year_max), step=1)
 
     ufs = sorted([u for u in df.get("UF", pd.Series(dtype=str)).dropna().unique().tolist() if u])
     uf_sel = st.multiselect("UF", options=ufs, default=ufs if len(ufs) <= 8 else [])
@@ -109,30 +121,48 @@ with st.sidebar:
 
 # ---------------------------- FILTER ----------------------------
 mask = (df["ANO_INICIO"].fillna(year_min) >= ano_range[0]) & (df["ANO_INICIO"].fillna(year_max) <= ano_range[1])
-if uf_sel:   mask &= df["UF"].isin(uf_sel)
-if muni_sel: mask &= df["MUNICIPIO"].isin(muni_sel)
-if situ_sel: mask &= df["SITUACAO_CADASTRAL"].isin(situ_sel)
-if cnae_sel: mask &= df["CNAE_FISCAL_PRINCIPAL"].isin(cnae_sel)
-if search:   mask &= df.get("NOME_FANTASIA", "").astype(str).str.contains(search, case=False, na=False)
+if uf_sel:
+    mask &= df["UF"].isin(uf_sel)
+if muni_sel:
+    mask &= df["MUNICIPIO"].isin(muni_sel)
+if situ_sel:
+    mask &= df["SITUACAO_CADASTRAL"].isin(situ_sel)
+if cnae_sel:
+    mask &= df["CNAE_FISCAL_PRINCIPAL"].isin(cnae_sel)
+if search and "NOME_FANTASIA" in df.columns:
+    mask &= df["NOME_FANTASIA"].astype(str).str.contains(search, case=False, na=False)
 
 fdf = df[mask].copy()
 
 # ---------------------------- KPIs ----------------------------
 st.markdown('<div class="chip">Filtro ativo • {} registros</div>'.format(len(fdf)), unsafe_allow_html=True)
 col1, col2, col3, col4 = st.columns(4)
-with col1: st.markdown('<div class="kpi"><h3>Total de Empresas</h3><div class="big">{:,}</div></div>'.format(len(fdf)), unsafe_allow_html=True)
-with col2: st.markdown('<div class="kpi"><h3>UFs</h3><div class="big">{:,}</div></div>'.format(fdf["UF"].nunique() if "UF" in fdf else 0), unsafe_allow_html=True)
-with col3: st.markdown('<div class="kpi"><h3>Municípios</h3><div class="big">{:,}</div></div>'.format(fdf["MUNICIPIO"].nunique() if "MUNICIPIO" in fdf else 0), unsafe_allow_html=True)
-with col4: st.markdown('<div class="kpi"><h3>Anos</h3><div class="big">{:,}</div></div>'.format(fdf["ANO_INICIO"].nunique()), unsafe_allow_html=True)
+with col1:
+    st.markdown('<div class="kpi"><h3>Total de Empresas</h3><div class="big">{:,}</div></div>'.format(len(fdf)), unsafe_allow_html=True)
+with col2:
+    st.markdown('<div class="kpi"><h3>UFs</h3><div class="big">{:,}</div></div>'.format(fdf["UF"].nunique() if "UF" in fdf else 0), unsafe_allow_html=True)
+with col3:
+    st.markdown('<div class="kpi"><h3>Municípios</h3><div class="big">{:,}</div></div>'.format(fdf["MUNICIPIO"].nunique() if "MUNICIPIO" in fdf else 0), unsafe_allow_html=True)
+with col4:
+    st.markdown('<div class="kpi"><h3>Anos</h3><div class="big">{:,}</div></div>'.format(fdf["ANO_INICIO"].nunique()), unsafe_allow_html=True)
 
 # ---------------------------- CHARTS ----------------------------
 c1, c2 = st.columns([1,1])
+
 with c1:
     if "SITUACAO_CADASTRAL" in fdf.columns and not fdf.empty:
-        situ_counts = fdf["SITUACAO_CADASTRAL"].fillna("Não informado").value_counts().reset_index()
-        situ_fig = px.bar(situ_counts, x="index", y="SITUACAO_CADASTRAL",
-                          title="Empresas por Situação Cadastral",
-                          labels={"index":"Situação", "SITUACAO_CADASTRAL":"Quantidade"})
+        situ_counts = (
+            fdf["SITUACAO_CADASTRAL"]
+            .fillna("Não informado")
+            .value_counts()
+            .rename_axis("Situacao")
+            .reset_index(name="Quantidade")
+        )
+        situ_fig = px.bar(
+            situ_counts, x="Situacao", y="Quantidade",
+            title="Empresas por Situação Cadastral",
+            labels={"Situacao":"Situação", "Quantidade":"Quantidade"}
+        )
         situ_fig.update_layout(margin=dict(l=8,r=8,t=50,b=8), height=380, bargap=0.25,
                                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(situ_fig, use_container_width=True)
@@ -141,9 +171,19 @@ with c1:
 
 with c2:
     if "CNAE_FISCAL_PRINCIPAL" in fdf.columns and not fdf.empty:
-        top_cnae = fdf["CNAE_FISCAL_PRINCIPAL"].fillna("Não informado").value_counts().head(10).reset_index()
-        cnae_fig = px.bar(top_cnae, x="index", y="CNAE_FISCAL_PRINCIPAL",
-                          title="Top 10 CNAE Principal", labels={"index":"CNAE", "CNAE_FISCAL_PRINCIPAL":"Quantidade"})
+        top_cnae = (
+            fdf["CNAE_FISCAL_PRINCIPAL"]
+            .fillna("Não informado")
+            .value_counts()
+            .head(10)
+            .rename_axis("CNAE")
+            .reset_index(name="Quantidade")
+        )
+        cnae_fig = px.bar(
+            top_cnae, x="CNAE", y="Quantidade",
+            title="Top 10 CNAE Principal",
+            labels={"CNAE":"CNAE", "Quantidade":"Quantidade"}
+        )
         cnae_fig.update_layout(margin=dict(l=8,r=8,t=50,b=8), height=380, bargap=0.25,
                                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(cnae_fig, use_container_width=True)
@@ -153,9 +193,19 @@ with c2:
 c3, c4 = st.columns([1,1])
 with c3:
     if "MUNICIPIO" in fdf.columns and not fdf.empty:
-        top_muni = fdf["MUNICIPIO"].fillna("Não informado").value_counts().head(10).reset_index()
-        muni_fig = px.bar(top_muni, x="index", y="MUNICIPIO",
-                          title="Top 10 Municípios", labels={"index":"Município", "MUNICIPIO":"Quantidade"})
+        top_muni = (
+            fdf["MUNICIPIO"]
+            .fillna("Não informado")
+            .value_counts()
+            .head(10)
+            .rename_axis("Municipio")
+            .reset_index(name="Quantidade")
+        )
+        muni_fig = px.bar(
+            top_muni, x="Municipio", y="Quantidade",
+            title="Top 10 Municípios",
+            labels={"Municipio":"Município", "Quantidade":"Quantidade"}
+        )
         muni_fig.update_layout(margin=dict(l=8,r=8,t=50,b=8), height=380, bargap=0.25,
                                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(muni_fig, use_container_width=True)
@@ -178,10 +228,10 @@ st.markdown("#### 📄 Registros filtrados")
 st.dataframe(fdf, use_container_width=True, hide_index=True)
 
 # ---------------------------- DOWNLOADS ----------------------------
-def to_excel_bytes(df: pd.DataFrame) -> bytes:
+def to_excel_bytes(df_: pd.DataFrame) -> bytes:
     out = BytesIO()
     with pd.ExcelWriter(out, engine="xlsxwriter") as writer:
-        df.to_excel(writer, index=False, sheet_name="dados")
+        df_.to_excel(writer, index=False, sheet_name="dados")
     return out.getvalue()
 
 c5, c6 = st.columns([1,1])
@@ -203,4 +253,3 @@ with c6:
     )
 
 st.markdown('<div class="footer">Feito com ❤️ em Streamlit + Plotly • Tema: Time Paulo Ferreira</div>', unsafe_allow_html=True)
-
